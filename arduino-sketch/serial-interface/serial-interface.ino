@@ -9,29 +9,6 @@
 
 */
 
-// ========== Setup variables ========== //
-
-typedef struct
-{
-  int value       = 0;
-  String type     = ""; //DI (Digital IN), ADI (Analog to digital IN), DO (Digital OUT), PWM, AI (Analog IN),
-  String function = ""; //close, open, motor, sensor
-  int sensorId    = 0;  //id in board struct for sensor in position
-}  board_type;
-
-board_type board[69]; //Board setup
-
-long millisWriteTemp    = 0;          //Records last update
-long intervalWrite      = 100;        //Interval for write serial
-
-String inputString      = "";         // a string to hold incoming data
-String resultString     = "";
-boolean stringComplete  = false;      // whether the string is complete
-
-String cmd;
-int pin;
-int value;
-
 // ========== Contants ========== //
 const int DI_START = 40;
 const int DI_END = 53;
@@ -51,6 +28,30 @@ const int VALVES_RB2_END = 9;
 const int VALVES_RB3_4_START = 26;
 const int VALVES_RB3_4_END = 39;
 
+const int UNDEFINED_VALUE = 10000;
+
+// ========== Setup variables ========== //
+
+typedef struct
+{
+  int value       = UNDEFINED_VALUE;
+  String type     = ""; //DI (Digital IN), ADI (Analog to digital IN), DO (Digital OUT), PWM, AI (Analog IN),
+  String function = ""; //close, open, motor, sensor
+  int sensorId    = 0;  //id in board struct for sensor in position
+}  board_type;
+
+board_type board[69]; //Board setup
+
+long millisWriteTemp    = 0;          //Records last update
+long intervalWrite      = 100;        //Interval for write serial
+
+String inputString      = "";         // a string to hold incoming data
+String resultString     = "";
+boolean stringComplete  = false;      // whether the string is complete
+
+String cmd;
+int pin;
+int value;
 
 // ========== Setup program ========== //
 void setup() {
@@ -133,7 +134,7 @@ void loop() {
 
   if (abs(currentMillis - millisWriteTemp) > intervalWrite) {
     millisWriteTemp = currentMillis;
-    writeToSerial(); //Write all indata (DI, ADI, AI) to serial port
+    readPins(); //Write all indata (DI, ADI, AI) to serial port
     checkLimits();  //Check limit switches and shut of if in position - This program is also called when recieving a digital write from serial.
   }
 
@@ -159,15 +160,7 @@ void writeToBoard() {
       if (digitalRead(board[pin].sensorId) == HIGH)  {
         digitalWrite(pin, value);
       }
-/*
-      // Write zero to the opposite direction of the valve to prevent both directions being set at the same time
-      if (board[pin].function = "CLOSE") {
-        digitalWrite(pin-1, 0);
-      } 
-      else if (board[pin].function = "OPEN") {
-        digitalWrite(pin+1, 0);
-      }
-*/
+
       break;
 
     } 
@@ -183,33 +176,21 @@ void writeToBoard() {
 }
 
 // ========== Program write inputdata to serial ========== //
-void writeToSerial() {
+void readPins() {
 
   // Read digital pins and print to serial port
   for (int pinId = DI_START ; pinId <= DI_END; pinId++) {
-    resultString = pinId;
-    resultString += '|';
-    resultString += !digitalRead(pinId);
-
-    Serial.println(resultString);
+    writeToSerial(pinId, true);
   }
 
   // Read analog to digital pins and print to serial port
   for (int pinId = ADI_START ; pinId <= ADI_END; pinId++) {
-    resultString = pinId;
-    resultString += '|';
-    resultString += !digitalRead(pinId);
-
-    Serial.println(resultString);
+    writeToSerial(pinId, true);
   }
 
   // Read analog pins and print to serial port
   for (int pinId = AI_START ; pinId <= AI_END; pinId++) {
-    resultString = pinId;
-    resultString += '|';
-    resultString += analogRead(pinId);
-
-    Serial.println(resultString);
+    writeToSerial(pinId, false);
   }
 }
 
@@ -250,4 +231,31 @@ void serialEvent() {
   }
 }
 
+// ========== Helper functions ========== //
+
+/* WriteToSerial
+ * 
+ * Reads a pin and writes it to serial if value has changed
+ * 
+ */
+void writeToSerial(int pinId, boolean digital) {
+  resultString = pinId;
+  resultString += '|';
+  int pinValue = 0;
+  
+  if(digital) {
+    pinValue = !digitalRead(pinId);
+  } else {
+    pinValue = analogRead(pinId);
+  }
+
+  // Write to serial of value changed
+  if(board[pinId].value != pinValue){
+    board[pinId].value = pinValue;
+
+    resultString += pinValue;
+    Serial.println(resultString);
+  }
+
+}
 
